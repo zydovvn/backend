@@ -117,8 +117,8 @@ app.use("/api/products", productImagesRoutes);
 app.use("/api/profile", profileStatsRoutes);
 
 /* ------------- socket.io ------------- */
-import http from "http";
-import { Server } from "socket.io";
+// import http from "http";
+// import { Server } from "socket.io";
 
 const server = http.createServer(app);
 const io = new Server(server, { cors: corsOptions });
