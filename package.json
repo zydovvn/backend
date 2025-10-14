@@ -3,9 +3,11 @@
   "version": "1.0.0",
   "main": "server.js",
   "type": "module",
+  "engines": { "node": "18.x" },
   "scripts": {
     "dev": "nodemon server.js",
-    "start": "node server.js"
+    "start": "node server.js",
+    "build": "echo \"no build step\""
   },
   "dependencies": {
     "bcrypt": "^6.0.0",

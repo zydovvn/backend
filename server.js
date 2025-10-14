@@ -117,9 +117,12 @@ app.use("/api/products", productImagesRoutes);
 app.use("/api/profile", profileStatsRoutes);
 
 /* ------------- socket.io ------------- */
+import http from "http";
+import { Server } from "socket.io";
+
 const server = http.createServer(app);
 const io = new Server(server, { cors: corsOptions });
-app.set("io", io); // cho phép routes truy cập socket bằng req.app.get("io")
+app.set("io", io);
 
 // Namespace chat:  ws://host/chat
 const chat = io.of("/chat");
@@ -141,5 +144,10 @@ io.on("connection", (socket) => {
 
 /* ------------- start ------------- */
 const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => console.log(`Server running on ${PORT}`));
-server.listen(PORT, () => console.log(`✅ Server running on port ${PORT}`));
+// ❌ BỎ DÒNG NÀY nếu đang có:
+// app.listen(PORT, () => console.log(`Server running on ${PORT}`));
+
+// ✅ Chỉ giữ duy nhất dòng dưới:
+server.listen(PORT, "0.0.0.0", () => {
+  console.log(`✅ Server running on port ${PORT}`);
+});
