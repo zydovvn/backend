@@ -10,7 +10,7 @@ import { fileURLToPath } from "url";
 import fs from "fs";
 import http from "http";
 import { Server } from "socket.io";
-
+import { Server as SocketIOServer } from "socket.io";
 // Routes
 import authRoutes from "./routes/authRoutes.js";
 import productRoutes from "./routes/productRoutes.js";
@@ -51,6 +51,18 @@ function isDevHost(origin) {
     return false;
   }
 }
+
+// ✅ CORS CHO REST API
+app.use(cors({
+  origin(origin, cb) {
+    // Cho phép Postman / SSR (origin null) hoặc domain trong whitelist
+    if (!origin || ALLOW_ORIGINS.includes(origin)) return cb(null, true);
+    return cb(new Error("Not allowed by CORS"));
+  },
+  credentials: true,
+  methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"],
+}));
 
 const corsOptions = {
   origin(origin, cb) {

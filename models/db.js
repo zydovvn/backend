@@ -18,6 +18,8 @@ const pool = useConnStr
       // Với host nội bộ *.railway.internal thường KHÔNG cần SSL.
       // Nếu sau này dùng public host và bị lỗi SSL, set PGSSLMODE=require trong Variables.
       ssl: process.env.PGSSLMODE === "require" ? { rejectUnauthorized: false } : false,
+            connectionTimeoutMillis: 5000,   // ⬅ thêm
+      idleTimeoutMillis: 10000  
     })
   : new Pool({
       user: process.env.DB_USER || "postgres",
