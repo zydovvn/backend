@@ -1,4 +1,4 @@
-// backend/server.js  (ESM)
+// server.js (ESM)
 import express from "express";
 import helmet from "helmet";
 import rateLimit from "express-rate-limit";
@@ -11,7 +11,7 @@ import fs from "fs";
 import http from "http";
 import { Server } from "socket.io";
 
-// Routes
+// --- import routes của bạn ---
 import authRoutes from "./routes/authRoutes.js";
 import productRoutes from "./routes/productRoutes.js";
 import categoryRoutes from "./routes/categoryRoutes.js";
@@ -32,126 +32,101 @@ import profileStatsRoutes from "./routes/profileStatsRoutes.js";
 import sellerRoutes from "./routes/sellerRoutes.js";
 
 dotenv.config();
-// const express = require('express');
-app.set("trust proxy", 1);
+
+// 1) KHỞI TẠO APP TRƯỚC
 const app = express();
 
-/* -------------------- CORS -------------------- */
-/** ALLOWED_ORIGINS: chuỗi CSV trong .env
- *  Ví dụ (Railway Backend):
- *  ALLOWED_ORIGINS=https://frontend-production-fe496.up.railway.app,http://localhost:5173
- */
+// 2) TIN CẬY PROXY (Railway/Heroku…)
+app.set("trust proxy", 1);
+
+// 3) CORS
 const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || "")
   .split(",")
-  .map((s) => s.trim())
+  .map(s => s.trim())
   .filter(Boolean);
 
 const corsOptions = {
   origin(origin, cb) {
-    // Cho phép Postman/SSR (origin null) hoặc domain trong whitelist
     if (!origin || ALLOWED_ORIGINS.includes(origin)) return cb(null, true);
     return cb(new Error("Not allowed by CORS"));
   },
   credentials: true,
-  methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-  allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"],
+  methods: ["GET","POST","PUT","PATCH","DELETE","OPTIONS"],
+  allowedHeaders: ["Content-Type","Authorization","X-Requested-With"],
 };
-
 app.use(cors(corsOptions));
-app.options("*", cors(corsOptions)); // preflight
-app.use((req, res, next) => {
-  // giúp CDN/browser cache theo Origin chính xác
-  res.header("Vary", "Origin");
-  next();
-});
+app.options("*", cors(corsOptions));
+app.use((req, res, next) => { res.header("Vary", "Origin"); next(); });
 
-/* ------------- security & parsers ------------- */
+// 4) SECURITY & PARSERS
 app.use(helmet({ crossOriginResourcePolicy: { policy: "cross-origin" } }));
 app.use(rateLimit({ windowMs: 15 * 60 * 1000, max: 500 }));
 app.use(cookieParser());
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true, limit: "10mb" }));
 
-/* ------------- __dirname (ESM) ------------- */
+// 5) STATIC & PATHS
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-
-/* ------------- ensure uploads dirs ------------- */
 const uploadDir = path.join(__dirname, "uploads");
 const avatarDir = path.join(uploadDir, "avatars");
 const reviewDir = path.join(uploadDir, "reviews");
-[uploadDir, avatarDir, reviewDir].forEach((d) => {
-  if (!fs.existsSync(d)) fs.mkdirSync(d, { recursive: true });
-});
+[uploadDir, avatarDir, reviewDir].forEach(d => { if (!fs.existsSync(d)) fs.mkdirSync(d, { recursive: true }); });
 
-/* ------------- static ------------- */
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 app.use("/uploads", express.static(path.join(process.cwd(), "uploads")));
 
-/* ------------- mount routes ------------- */
+// 6) HEALTH (để test nhanh)
+app.get("/api/health", (req, res) => {
+  res.json({
+    ok: true,
+    env: process.env.NODE_ENV,
+    time: new Date().toISOString(),
+    allowed: ALLOWED_ORIGINS,
+  });
+});
+
+// 7) ROUTES
 app.use("/api/auth", authRoutes);
 app.use("/api/products", productRoutes);
 app.use("/api/categories", categoryRoutes);
-
 app.use("/api/cart", cartRoutes);
 app.use("/api/favorites", favoriteRoutes);
 app.use("/api/users", userRoutes);
 app.use("/api/orders", orderRoutes);
 app.use("/api/disputes", disputeRoutes);
-
-app.use("/api/products", reviewRoutes);         // /api/products/:id/reviews
+app.use("/api/products", reviewRoutes);
 app.use("/api/notifications", notificationRoutes);
 app.use("/api/messages", messageRoutes);
-
-app.use("/api/profile", profileRoutes);         // hồ sơ (CRUD)
-app.use("/api/profile", profileStatsRoutes);    // thống kê hồ sơ (khác prefix nhưng chung /api/profile)
-app.use("/api/sellers", sellerRoutes);          // ✅ đúng router cho seller
-
-// Voucher routes tự có prefix bên trong (giữ nguyên)
+app.use("/api/profile", profileRoutes);
+app.use("/api/profile", profileStatsRoutes);
+app.use("/api/sellers", sellerRoutes);
 app.use(voucherRoutes);
-
 app.use("/api/market", marketRoutes);
 app.use("/api/products", productExtraRoutes);
 app.use("/api/products", productImagesRoutes);
 
-/* ------------- socket.io ------------- */
+// 8) HTTP + SOCKET.IO
 const server = http.createServer(app);
-const io = new Server(server, {
-  cors: corsOptions, // dùng cùng corsOptions cho thống nhất
-});
+const io = new Server(server, { cors: corsOptions });
 app.set("io", io);
 
-// Namespace chat
 const chat = io.of("/chat");
 chat.on("connection", (socket) => {
   const { userId } = socket.handshake.auth || {};
   socket.data.userId = userId;
-
-  socket.on("join", ({ conversationId }) => {
-    if (conversationId) socket.join(`c:${conversationId}`);
-  });
-  socket.on("typing", ({ conversationId, isTyping }) => {
-    if (conversationId) socket.to(`c:${conversationId}`).emit("typing", { userId: socket.data.userId, isTyping });
-  });
-  socket.on("message:send", ({ conversationId, message }) => {
-    if (conversationId && message) socket.to(`c:${conversationId}`).emit("message:new", { message });
-  });
-  socket.on("read", ({ conversationId, lastMessageId }) => {
-    if (conversationId) socket.to(`c:${conversationId}`).emit("read", { lastMessageId });
-  });
+  socket.on("join", ({ conversationId }) => { if (conversationId) socket.join(`c:${conversationId}`); });
+  socket.on("typing", ({ conversationId, isTyping }) => { if (conversationId) socket.to(`c:${conversationId}`).emit("typing", { userId, isTyping }); });
+  socket.on("message:send", ({ conversationId, message }) => { if (conversationId && message) socket.to(`c:${conversationId}`).emit("message:new", { message }); });
+  socket.on("read", ({ conversationId, lastMessageId }) => { if (conversationId) socket.to(`c:${conversationId}`).emit("read", { lastMessageId }); });
 });
 
-// Kênh sản phẩm (ví dụ)
 io.on("connection", (socket) => {
-  socket.on("product:join", ({ productId }) => {
-    if (productId) socket.join(`product:${productId}`);
-  });
-  socket.on("product:leave", ({ productId }) => {
-    if (productId) socket.leave(`product:${productId}`);
-  });
+  socket.on("product:join", ({ productId }) => { if (productId) socket.join(`product:${productId}`); });
+  socket.on("product:leave", ({ productId }) => { if (productId) socket.leave(`product:${productId}`); });
 });
 
-/* ------------- start ------------- */
+// 9) START
 const PORT = process.env.PORT || 5000;
 server.listen(PORT, "0.0.0.0", () => {
   console.log(`✅ Server running on ${PORT}`);
