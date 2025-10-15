@@ -32,6 +32,7 @@ import profileStatsRoutes from "./routes/profileStatsRoutes.js";
 import sellerRoutes from "./routes/sellerRoutes.js";
 
 dotenv.config();
+const express = require('express');
 
 const app = express();
 
