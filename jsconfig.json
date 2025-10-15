@@ -1,0 +1,11 @@
+// backend/jsconfig.json
+{
+  "compilerOptions": {
+    "checkJs": false,
+    "target": "ES2020",
+    "module": "ESNext",
+    "moduleResolution": "Node",
+    "baseUrl": "."
+  },
+  "exclude": ["node_modules", "**/node_modules/*", "dist", "build"]
+}
