@@ -108,7 +108,14 @@ app.use("/api/products", productImagesRoutes);
 
 // 8) HTTP + SOCKET.IO
 const server = http.createServer(app);
-const io = new Server(server, { cors: corsOptions });
+const io = new Server(server, {
+  cors: {
+    origin: ALLOWED_ORIGINS,
+    methods: ["GET", "POST"],
+    credentials: true,
+  },
+  transports: ["websocket", "polling"],
+});
 app.set("io", io);
 
 const chat = io.of("/chat");
