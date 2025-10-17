@@ -139,3 +139,92 @@ export const updateProduct = async (req, res) => {
     res.status(500).json({ message: "Server error" });
   }
 };
+
+// 🧩 Lấy danh sách tin đăng của người bán
+export const getMyProducts = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const result = await pool.query(
+      `SELECT id, title, price, status, updated_at, expires_at
+       FROM products
+       WHERE seller_id = $1
+       ORDER BY updated_at DESC`,
+      [userId]
+    );
+    res.json(result.rows);
+  } catch (err) {
+    console.error("getMyProducts error:", err.message);
+    res.status(500).json({ error: "Không thể lấy danh sách tin" });
+  }
+};
+
+// 📊 Thống kê tin đăng theo trạng thái
+export const getMyProductsStats = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const result = await pool.query(
+      `SELECT 
+          COUNT(*) FILTER (WHERE status='active') AS active_count,
+          COUNT(*) FILTER (WHERE status='expired') AS expired_count,
+          COUNT(*) AS total_count
+       FROM products
+       WHERE seller_id=$1`,
+      [userId]
+    );
+    res.json(result.rows[0]);
+  } catch (err) {
+    console.error("getMyProductsStats error:", err.message);
+    res.status(500).json({ error: "Không thể thống kê tin" });
+  }
+};
+
+// 🔁 Làm mới tin (đẩy lên đầu danh sách)
+export const refreshProduct = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const userId = req.user.id;
+    await pool.query(
+      `UPDATE products SET updated_at = NOW()
+       WHERE id = $1 AND seller_id = $2`,
+      [id, userId]
+    );
+    res.json({ success: true, message: "Đã làm mới tin đăng" });
+  } catch (err) {
+    console.error("refreshProduct error:", err.message);
+    res.status(500).json({ error: "Không thể làm mới tin" });
+  }
+};
+
+// ⏳ Gia hạn tin thêm 7 ngày
+export const extendProduct = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const userId = req.user.id;
+    await pool.query(
+      `UPDATE products 
+       SET expires_at = COALESCE(expires_at, NOW()) + interval '7 days'
+       WHERE id = $1 AND seller_id = $2`,
+      [id, userId]
+    );
+    res.json({ success: true, message: "Đã gia hạn tin thêm 7 ngày" });
+  } catch (err) {
+    console.error("extendProduct error:", err.message);
+    res.status(500).json({ error: "Không thể gia hạn tin" });
+  }
+};
+
+// 🗑️ Xóa tin đăng
+export const deleteProduct = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const userId = req.user.id;
+    await pool.query(`DELETE FROM products WHERE id=$1 AND seller_id=$2`, [
+      id,
+      userId,
+    ]);
+    res.json({ success: true, message: "Đã xóa tin đăng" });
+  } catch (err) {
+    console.error("deleteProduct error:", err.message);
+    res.status(500).json({ error: "Không thể xóa tin" });
+  }
+};
