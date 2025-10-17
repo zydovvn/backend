@@ -1,4 +1,3 @@
-// backend/routes/productRoutes.js
 import express from "express";
 import path from "path";
 import pool from "../models/db.js";
@@ -11,6 +10,19 @@ import {
 import { redeemAfterCreatePost } from "../services/feeService.js";
 
 const router = express.Router();
+
+// /* =============== CATEGORIES tiện ích =============== */
+// router.get("/categories/all", async (req, res) => {
+//   try {
+//     const { rows } = await pool.query(
+//       "SELECT id, name, slug FROM categories ORDER BY id ASC"
+//     );
+//     res.json(rows);
+//   } catch (err) {
+//     console.error("GET /categories/all error:", err);
+//     res.status(500).json({ error: "Server error" });
+//   }
+// });
 
 /* ================= Upload ================= */
 const upload = diskUploader("products");
@@ -72,6 +84,8 @@ router.post(
   }
 );
 
+
+
 /* =============== COUNTER Myposts =============== */
 router.get("/myposts/count", authMiddleware, async (req, res) => {
   try {
@@ -86,35 +100,109 @@ router.get("/myposts/count", authMiddleware, async (req, res) => {
   }
 });
 
-/* =============== CATEGORIES tiện ích =============== */
-router.get("/categories/all", async (_req, res) => {
+/* ======================= ✨ SELLER DASHBOARD ✨ ======================= */
+
+/** 🧮 Thống kê tin đăng theo trạng thái */
+router.get("/mine/stats", authMiddleware, async (req, res) => {
   try {
-    const r = await pool.query(
-      "SELECT id, name, slug FROM categories ORDER BY id ASC"
+    const { rows } = await pool.query(
+      `
+      SELECT 
+        COUNT(*) AS total_count,
+        COUNT(*) FILTER (WHERE COALESCE(is_available, TRUE) = TRUE) AS active_count,
+        COUNT(*) FILTER (WHERE COALESCE(is_available, FALSE) = FALSE) AS hidden_count,
+        COUNT(*) FILTER (WHERE COALESCE(expires_at, NOW()) < NOW()) AS expired_count
+      FROM products
+      WHERE user_id = $1
+      `,
+      [req.user.id]
     );
-    return res.json(r.rows);
+    res.json(rows[0]);
   } catch (e) {
-    console.error("categories:", e);
-    return res.status(500).json({ error: "Server error" });
+    console.error("mine stats error:", e);
+    res.status(500).json({ error: "Server error: " + e.message });
   }
 });
 
-/* =============== MY POSTS (list) =============== */
-router.get("/myposts", authMiddleware, async (req, res) => {
+
+/** 🔁 Làm mới tin đăng (đẩy lên đầu) */
+router.patch("/:id/refresh", authMiddleware, async (req, res) => {
   try {
-    const r = await pool.query(
-      `SELECT p.id, p.name, p.price, p.description, p.image_url, p.created_at,
-              c.id AS category_id, c.name AS category_name, c.slug AS category_slug
-         FROM products p
-         JOIN categories c ON c.id = p.category_id
-        WHERE p.user_id = $1
-     ORDER BY p.created_at DESC`,
+    const { id } = req.params;
+    await pool.query(
+      `UPDATE products 
+         SET updated_at = NOW()
+       WHERE id=$1 AND user_id=$2`,
+      [id, req.user.id]
+    );
+    res.json({ success: true, message: "Đã làm mới tin đăng" });
+  } catch (e) {
+    console.error("refresh:", e);
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+/** ⏳ Gia hạn tin đăng thêm 7 ngày */
+router.patch("/:id/extend", authMiddleware, async (req, res) => {
+  try {
+    const { id } = req.params;
+    await pool.query(
+      `UPDATE products
+         SET expires_at = COALESCE(expires_at, NOW()) + interval '7 days'
+       WHERE id=$1 AND user_id=$2`,
+      [id, req.user.id]
+    );
+    res.json({ success: true, message: "Đã gia hạn tin thêm 7 ngày" });
+  } catch (e) {
+    console.error("extend:", e);
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+/** 🗑️ Xóa tin đăng (dành cho người bán) */
+router.delete("/:id", authMiddleware, async (req, res) => {
+  try {
+    const { id } = req.params;
+    await pool.query(`DELETE FROM products WHERE id=$1 AND user_id=$2`, [
+      id,
+      req.user.id,
+    ]);
+    res.json({ success: true, message: "Đã xóa tin đăng" });
+  } catch (e) {
+    console.error("delete product:", e);
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+/* =================== END SELLER DASHBOARD =================== */
+
+/* =============== MY PRODUCTS (for MyPosts page) =============== */
+router.get("/mine", authMiddleware, async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `
+       SELECT
+        p.id,
+        p.name,
+        p.price,
+        CASE 
+          WHEN expires_at < NOW() THEN 'expired'
+          WHEN COALESCE(p.is_available, TRUE) THEN 'active'
+          ELSE 'hidden'
+        END AS status,
+        p.updated_at,
+        p.created_at,
+        p.image_url
+      FROM products p
+      WHERE p.user_id = $1
+      ORDER BY p.created_at DESC
+      `,
       [req.user.id]
     );
-    return res.json(r.rows.map(toProduct));
-  } catch (e) {
-    console.error("myposts:", e);
-    return res.status(500).json({ error: "Server error" });
+    res.json(rows.map(toProduct));
+  } catch (err) {
+    console.error("GET /api/products/mine error:", err);
+    res.status(500).json({ error: "Failed to fetch my products" });
   }
 });
 
@@ -532,6 +620,7 @@ router.get("/:id/price-range", async (req, res) => {
     res.status(500).json({ error: "Server error" });
   }
 });
+
 
 
 
