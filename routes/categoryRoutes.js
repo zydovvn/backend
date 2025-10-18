@@ -4,6 +4,20 @@ import pool from "../models/db.js";
 
 const router = express.Router();
 
+// GET /api/categories
+router.get("/", async (req, res) => {
+  try {
+    const result = await pool.query(
+      "SELECT id, name, slug FROM categories ORDER BY id ASC"
+    );
+    res.json(result.rows);
+  } catch (err) {
+    console.error("GET /api/categories error:", err);
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+
 /* ================= GET ALL CATEGORIES ================= */
 router.get("/all", async (req, res) => {
   try {
