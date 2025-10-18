@@ -63,12 +63,13 @@ const corsOptions = {
   },
   credentials: true,
   methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-  allowedHeaders: (req, cb) =>
-    cb(
-      null,
-      req.header("Access-Control-Request-Headers") ||
-        "Content-Type,Authorization,X-Requested-With"
-    ),
+ allowedHeaders: [
+   "Content-Type",
+   "Authorization",
+   "X-Requested-With",
+   "Accept",
+   "Origin",
+ ],
   exposedHeaders: ["Content-Length"],
   optionsSuccessStatus: 204,
 };
