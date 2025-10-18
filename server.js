@@ -61,6 +61,7 @@ const corsOptions = {
     if (!origin) return cb(null, true);
     if (isDevHost(origin)) return cb(null, true);
     if (allowList.includes(origin)) return cb(null, true);
+    console.warn("❌ Blocked CORS origin:", origin);
     return cb(new Error("Not allowed by CORS"));
   },
   credentials: true,
